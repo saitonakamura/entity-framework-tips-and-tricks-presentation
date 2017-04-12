@@ -1,0 +1,326 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>reveal.js</title>
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/sky.css">
+
+		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+		var link = document.createElement('link');
+		link.rel = 'stylesheet';
+		link.type = 'text/css';
+		link.href = window.location.search.match(/print-pdf/gi)
+		  ? 'css/print/pdf.css'
+		  : 'css/print/paper.css';
+		document.getElementsByTagName('head')[0].appendChild(link);
+		</script>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<section data-markdown>
+					<script type="text/template">
+						## Entity Framework
+
+						Фишки и подводные камни
+
+						<aside class="notes">
+							Всем привет, немного о докладе <br />
+							Он для начинающих и тех кто пользуется EF и хочет сделать свою жизнь немного лучше <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Майкл Башуров
+
+						<img src="assets/logo_1_.png" style="background: none; border: 0; box-shadow: 0 0; width: 200px" />
+
+						[vk.com/saito_nakamura](https://vk.com/saito_nakamura)
+
+						<aside class="notes">
+							Пару слов о себе, я Майкл Башуров, сейчас работаю в Епаме <br />
+							На предыдущем месте много работал с EF, почти 5 лет, прошел путь от ничего не знающего об ORM до опытного пользователя <br />
+							Начинали мы еще с ObjectContext и Db-First и самописных миграций, в итоге перешли на Code Fist, DbContext и EF Migrations <br />
+							Начнем мы с всяких фишек и плюшек <br />
+							А закончим набитыми шишками и подводными камнями <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Фишки
+
+						<img src="assets/zaryad.jpg" style="width: 300px" />
+
+						<aside class="notes">
+							Итак, фишки <br />
+							Это то что может потенциально улучшить нам жизнь и душевное здоровье <br />
+							А также зарядить код на производительность и стабильность <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						#### Пониженная производительность широких таблиц
+						#### Убрать lazy-loading без Include
+
+						* Как выбрать часть столбцов?
+						* Как удобно и эффективно достать из справочников нужные данные?
+
+						<aside class="notes">
+							В EF сущность из таблицы обычно подтягивается целиком, т.е. все столбцы <br />
+							Это нормально для одной записи, но иногда вы достаете сразу много строк, но мало столбцов <br />
+							Вторая проблема, что если у вас есть lazy-loading и вы в цикле обращаетесь к navigation properties, <br />
+							то т.к. это lazy-loading то запросы будут выполняться в момент обращения, то сколько их столько и будет запросов к базе <br />
+							Мы можем вызвать Include, но его можно забыть вызвать и он не решает первой проблемы <br />
+							Так как же лучше поступить? <br />
+							Воспользоваться object initializer <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Object Initializer
+
+						<pre><code data-trim data-noescape class="csharp">
+	var invoiceViews = invoicesQuery.Select(invoice => new InvoiceView()
+	  {
+	    Id = invoice.Id,
+	    Number = invoice.Number,
+	    Client = new ClientView()
+	    {
+	        Id = invoice.Client.Id,
+	        Name = invoice.Client.Name,
+	    },
+	  }
+	  .OrderByDescending(invoiceView => invoiceView.Number)
+	  .ToList()
+						</code></pre>
+
+						<aside class="notes">
+							Можно использовать object initializer если есть конструктор без параметров и это нормально протранслируется в sql (и в LinqToEntities и в LinqToSql) <br />
+							Нельзя использовать property (как и в целом в LinqToEntities и в LinqToSql) <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Как транслировать property?
+
+						<img src="assets/Riddler_BTAS_06.gif" style="background: none; border: 0; box-shadow: 0 0; width: 400px" />
+
+						<aside class="notes">
+							Обычно на этом этапе когда мы стараемся больше транслировать на sql, возникает потребность инкапсулировать логику в property <br />
+							Но property не транслируются в LinqToSql и LinqToEntities! <br />
+							Что же делать? <br />
+							На помощь приходит Microsoft.Linq.Translation <br />
+						</aside>
+					</script>
+				</section>
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							### Microsoft Linq Translation
+
+							<pre><code data-trim data-noescape class="csharp">
+using Microsoft.Linq.Translation;
+
+public class Invoice
+{
+    public static readonly CompiledExpression&lt;Invoice, int&gt;
+        productsCountExpression =
+        DefaultTranslationOf&lt;Invoice&gt;
+            .Property(e => e.ProductsCount)
+            .Is(<mark>e => e.Products.Count()</mark>);
+
+    public int ProductsCount =>
+        productsCountExpression.Evaluate(this);
+}
+							</code></pre>
+
+							<aside class="notes">
+								Суть вот здесь <br />
+								Выглядит довольно страшно <br />
+								Зато используется почти удобно <br />
+							</aside>
+						</script>
+					</section>
+					<section>
+						<pre><code data-trim data-noescape class="csharp">
+var top10TaskWithMostComments = tasksQuery
+    .OrderByDescending(task => task.CommentsCount)
+    <mark>.WithTranslation()</mark>
+    .Take(10)
+    .ToList()
+						</code></pre>
+
+						<aside class="notes">
+							Нужно просто вызвать WithTranslation() <br />
+							При этом вы также можете использовать это в LinqToObjects <br />
+							Вызов WithTranslations() фактически инлайнит ваш Expression
+							и будет выполнен как если бы вы просто написали так: <br />
+						</aside>
+					</section>
+					<section>
+						<pre><code data-trim data-noescape class="csharp">
+var top10TaskWithMostComments = tasksQuery
+    .OrderByDescending(<mark>task => task.Comment.Count()</mark>)
+    .Take(10)
+    .ToList()
+						</code></pre>
+
+						<aside class="notes">
+							Со всеми вытекающими <br />
+						</aside>
+					</section>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Change Tracker
+
+						<img src="assets/3_114428.jpg" style="background: none; border: 0; box-shadow: 0 0; width: 600px" />
+
+						<aside class="notes">
+							Паттерн UnitOfWork предполагает что кто-то будет знать об изменениях когда мы вызовем Commit <br />
+							EntityFramework это все-таки большая ORM, а значит у нас есть ChangeTracker. <br />
+							В ObjectContext и DbContext апи отличается, <br />
+							но суть одна и та же, мы можем взять и сделать вот так <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Триггер на C#!
+
+						<pre><code data-trim data-noescape class="csharp">
+							foreach (var dbEntityEntry in _context.ChangeTracker.Entries()
+							    .Where(x => x.State == EntityState.Added
+							        || x.State == EntityState.Modified
+							        || x.State == EntityState.Deleted))
+							{
+							    // Do something with it...
+							}
+						</code></pre>
+
+						* Предпросчитывать значения
+						* Оповещать об изменениях
+						* Писать лог
+						* ?????
+						* PROFIT
+
+						[ChangeTracker для логирования изменений на github](https://github.com/saitonakamura/EntityFrameworkLogger)
+
+						<aside class="notes">
+							Можно поглядеть мой пример на гитхаб, ссылка будет в конце <br />
+							Какие преимущества это дает? Если мы знаем что ничто не проходит мимо нашего EntityFramework <br />
+							мы можем считать это триггером, но при этом писать его на C#! <br />
+							Можем предпросчитывать значения, можем посылать сообщения или писать читаемый лог изменений сущности. <br />
+							Но Change Tracker имеет свою цену и каждый объект в контексте имеет из-за этого оверхэд <br />
+							Но что если мы хотим просто отдать данные на чтение и не пользоваться отслеживанием изменений? <br />
+							К нам на помощь спешит AsNoTracking <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## As No Tracking
+
+						<pre><code data-trim data-noescape class="csharp">
+							var invoicesWithoutChangeTracking = _dbContext.Invoices
+	                <mark>.AsNoTracking()</mark>;
+						</code></pre>
+
+						<aside class="notes">
+							В 6-ом EntityFramework появился AsNoTracking() который делает именно это <br />
+							не добавляет объекты в ChangeTracker <br />
+							и мы получаем выигрыш по времени и по памяти <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Кастуем
+
+						<img src="assets/Ovid.jpg" style="width: 400px" />
+
+						<aside class="notes">
+							Бывает что у вас есть varchar колонка которая при этом содержит числа (но не всегда) <br />
+							но т.к. она содержит числа, вы хотите сделать авто инкремент и для этого вам надо посчитать максимальное число <br />
+							(да, это можно сделать и на стороне sql, но мы же с вами сейчас тут не триггерами обмазываемся). <br />
+							У нас это был например номер счета который должен был осуществлять сквозную нумерацию счетов в течении года <br />
+							но некоторые номера счетов диктовались клиентом и не были числовыми. <br />
+							Лирическое отступление: был такой замечательный древнеримский поэт, Овидий <br />
+						  Меня поэзия, честно говоря, не особо прет, но его Метаморфозы я прочел с удовольствием <br />
+							Ну и собственно метаморфозы нам и помогут и можно взять функцию Cast и сделать вот так <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Max with cast on string
+
+						<pre><code data-trim data-noescape class="csharp">
+invoices
+    .Where(x => SqlFunctions.IsNumeric(x.Number + ".0e0") == 1)
+    .Select(x => x.Number)
+    .Cast&lt;int&gt;()
+    .Max()
+						</code></pre>
+
+						[Select Max, but only on numeric values with LINQ to Entities](http://stackoverflow.com/a/26363093/1033173)
+
+						<aside class="notes">
+							“.0e0” нужно чтобы исключить нецелые числа и числа со знаком валюты <br />
+							Но все хорошее когда-нибудь заканчивается и начинается черная полоса <br />
+							Сейчас я хочу рассказать вам о..ю <br />
+						</aside>
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Подводные камни
+
+						<img src="assets/BAPwjRdqybM_1_.jpg" style="width: 500px" />
+
+						<aside class="notes">
+							Всевозможных подводных камнях и проблемах с которыми мне пришлось столкнуться <br />
+						</aside>
+					</script>
+				</section>
+			</div>
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+		// More info https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+  history: true,
+	slideNumber: true,
+  // More info https://github.com/hakimel/reveal.js#dependencies
+  dependencies: [
+    {src: 'plugin/markdown/marked.js'},
+    {src: 'plugin/markdown/markdown.js'},
+    {src: 'plugin/notes/notes.js', async: true},
+    {
+      src: 'plugin/highlight/highlight.js',
+      async: true,
+      callback: function() {
+        hljs.initHighlightingOnLoad();
+      },
+    },
+  ],
+});
+</script>
+	</body>
+</html>
