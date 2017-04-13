@@ -68,10 +68,11 @@
 						</aside>
 					</script>
 				</section>
+				<section>
 				<section data-markdown>
 					<script type="text/template">
-						#### Пониженная производительность широких таблиц
-						#### Убрать lazy-loading без Include
+						### Пониженная производительность широких таблиц
+						### Убрать lazy-loading без Include
 
 						* Как выбрать часть столбцов?
 						* Как удобно и эффективно достать из справочников нужные данные?
@@ -112,21 +113,22 @@
 						</aside>
 					</script>
 				</section>
-				<section data-markdown>
-					<script type="text/template">
-						## Как транслировать property?
-
-						<img src="assets/Riddler_BTAS_06.gif" style="background: none; border: 0; box-shadow: 0 0; width: 400px" />
-
-						<aside class="notes">
-							Обычно на этом этапе когда мы стараемся больше транслировать на sql, возникает потребность инкапсулировать логику в property <br />
-							Но property не транслируются в LinqToSql и LinqToEntities! <br />
-							Что же делать? <br />
-							На помощь приходит Microsoft.Linq.Translation <br />
-						</aside>
-					</script>
 				</section>
 				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Как транслировать property?
+
+							<img src="assets/Riddler_BTAS_06.gif" style="background: none; border: 0; box-shadow: 0 0; width: 300px" />
+
+							<aside class="notes">
+								Обычно на этом этапе когда мы стараемся больше транслировать на sql, возникает потребность инкапсулировать логику в property <br />
+								Но property не транслируются в LinqToSql и LinqToEntities! <br />
+								Что же делать? <br />
+								На помощь приходит Microsoft.Linq.Translation <br />
+							</aside>
+						</script>
+					</section>
 					<section data-markdown>
 						<script type="text/template">
 							### Microsoft Linq Translation
@@ -156,8 +158,8 @@ public class Invoice
 					</section>
 					<section>
 						<pre><code data-trim data-noescape class="csharp">
-var top10TaskWithMostComments = tasksQuery
-    .OrderByDescending(task => task.CommentsCount)
+var top10InvoicesWithMostProducts = invoicesQuery
+    .OrderByDescending(invoice => invoice.ProductsCount)
     <mark>.WithTranslation()</mark>
     .Take(10)
     .ToList()
@@ -172,8 +174,8 @@ var top10TaskWithMostComments = tasksQuery
 					</section>
 					<section>
 						<pre><code data-trim data-noescape class="csharp">
-var top10TaskWithMostComments = tasksQuery
-    .OrderByDescending(<mark>task => task.Comment.Count()</mark>)
+var top10InvoicesWithMostProducts = invoicesQuery
+    .OrderByDescending(<mark>invoice => invoice.Products.Count()</mark>)
     .Take(10)
     .ToList()
 						</code></pre>
@@ -183,107 +185,111 @@ var top10TaskWithMostComments = tasksQuery
 						</aside>
 					</section>
 				</section>
-				<section data-markdown>
-					<script type="text/template">
-						## Change Tracker
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Change Tracker
 
-						<img src="assets/3_114428.jpg" style="background: none; border: 0; box-shadow: 0 0; width: 600px" />
+							<img src="assets/3_114428.jpg" style="background: none; border: 0; box-shadow: 0 0; width: 600px" />
 
-						<aside class="notes">
-							Паттерн UnitOfWork предполагает что кто-то будет знать об изменениях когда мы вызовем Commit <br />
-							EntityFramework это все-таки большая ORM, а значит у нас есть ChangeTracker. <br />
-							В ObjectContext и DbContext апи отличается, <br />
-							но суть одна и та же, мы можем взять и сделать вот так <br />
-						</aside>
-					</script>
+							<aside class="notes">
+								Паттерн UnitOfWork предполагает что кто-то будет знать об изменениях когда мы вызовем Commit <br />
+								EntityFramework это все-таки большая ORM, а значит у нас есть ChangeTracker. <br />
+								В ObjectContext и DbContext апи отличается, <br />
+								но суть одна и та же, мы можем взять и сделать вот так <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Триггер на C#!
+
+							<pre><code data-trim data-noescape class="csharp">
+								foreach (var dbEntityEntry in _context.ChangeTracker.Entries()
+								    .Where(x => x.State == EntityState.Added
+								        || x.State == EntityState.Modified
+								        || x.State == EntityState.Deleted))
+								{
+								    // Do something with it...
+								}
+							</code></pre>
+
+							* Предпросчитывать значения
+							* Оповещать об изменениях
+							* Писать лог
+							* ?????
+							* PROFIT
+
+							[Пример на github](https://github.com/saitonakamura/EntityFrameworkLogger)
+
+							<aside class="notes">
+								Можно поглядеть мой пример на гитхаб, ссылка будет в конце <br />
+								Какие преимущества это дает? Если мы знаем что ничто не проходит мимо нашего EntityFramework <br />
+								мы можем считать это триггером, но при этом писать его на C#! <br />
+								Можем предпросчитывать значения, можем посылать сообщения или писать читаемый лог изменений сущности. <br />
+								Но Change Tracker имеет свою цену и каждый объект в контексте имеет из-за этого оверхэд <br />
+								Но что если мы хотим просто отдать данные на чтение и не пользоваться отслеживанием изменений? <br />
+								К нам на помощь спешит AsNoTracking <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## As No Tracking
+
+							<pre><code data-trim data-noescape class="csharp">
+								var invoicesWithoutChangeTracking = _dbContext.Invoices
+		                <mark>.AsNoTracking()</mark>;
+							</code></pre>
+
+							<aside class="notes">
+								В 6-ом EntityFramework появился AsNoTracking() который делает именно это <br />
+								не добавляет объекты в ChangeTracker <br />
+								и мы получаем выигрыш по времени и по памяти <br />
+							</aside>
+						</script>
+					</section>
 				</section>
-				<section data-markdown>
-					<script type="text/template">
-						## Триггер на C#!
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Кастуем
 
-						<pre><code data-trim data-noescape class="csharp">
-							foreach (var dbEntityEntry in _context.ChangeTracker.Entries()
-							    .Where(x => x.State == EntityState.Added
-							        || x.State == EntityState.Modified
-							        || x.State == EntityState.Deleted))
-							{
-							    // Do something with it...
-							}
-						</code></pre>
+							<img src="assets/Ovid.jpg" style="width: 400px" />
 
-						* Предпросчитывать значения
-						* Оповещать об изменениях
-						* Писать лог
-						* ?????
-						* PROFIT
+							<aside class="notes">
+								Бывает что у вас есть varchar колонка которая при этом содержит числа (но не всегда) <br />
+								но т.к. она содержит числа, вы хотите сделать авто инкремент и для этого вам надо посчитать максимальное число <br />
+								(да, это можно сделать и на стороне sql, но мы же с вами сейчас тут не триггерами обмазываемся). <br />
+								У нас это был например номер счета который должен был осуществлять сквозную нумерацию счетов в течении года <br />
+								но некоторые номера счетов диктовались клиентом и не были числовыми. <br />
+								Лирическое отступление: был такой замечательный древнеримский поэт, Овидий <br />
+							  Меня поэзия, честно говоря, не особо прет, но его Метаморфозы я прочел с удовольствием <br />
+								Ну и собственно метаморфозы нам и помогут и можно взять функцию Cast и сделать вот так <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Max with cast on string
 
-						[ChangeTracker для логирования изменений на github](https://github.com/saitonakamura/EntityFrameworkLogger)
+							<pre><code data-trim data-noescape class="csharp">
+	invoices
+	    .Where(x => SqlFunctions.IsNumeric(x.Number + ".0e0") == 1)
+	    .Select(x => x.Number)
+	    .Cast&lt;int&gt;()
+	    .Max()
+							</code></pre>
 
-						<aside class="notes">
-							Можно поглядеть мой пример на гитхаб, ссылка будет в конце <br />
-							Какие преимущества это дает? Если мы знаем что ничто не проходит мимо нашего EntityFramework <br />
-							мы можем считать это триггером, но при этом писать его на C#! <br />
-							Можем предпросчитывать значения, можем посылать сообщения или писать читаемый лог изменений сущности. <br />
-							Но Change Tracker имеет свою цену и каждый объект в контексте имеет из-за этого оверхэд <br />
-							Но что если мы хотим просто отдать данные на чтение и не пользоваться отслеживанием изменений? <br />
-							К нам на помощь спешит AsNoTracking <br />
-						</aside>
-					</script>
-				</section>
-				<section data-markdown>
-					<script type="text/template">
-						## As No Tracking
+							[Select Max, but only on numeric values with LINQ to Entities](http://stackoverflow.com/a/26363093/1033173)
 
-						<pre><code data-trim data-noescape class="csharp">
-							var invoicesWithoutChangeTracking = _dbContext.Invoices
-	                <mark>.AsNoTracking()</mark>;
-						</code></pre>
-
-						<aside class="notes">
-							В 6-ом EntityFramework появился AsNoTracking() который делает именно это <br />
-							не добавляет объекты в ChangeTracker <br />
-							и мы получаем выигрыш по времени и по памяти <br />
-						</aside>
-					</script>
-				</section>
-				<section data-markdown>
-					<script type="text/template">
-						## Кастуем
-
-						<img src="assets/Ovid.jpg" style="width: 400px" />
-
-						<aside class="notes">
-							Бывает что у вас есть varchar колонка которая при этом содержит числа (но не всегда) <br />
-							но т.к. она содержит числа, вы хотите сделать авто инкремент и для этого вам надо посчитать максимальное число <br />
-							(да, это можно сделать и на стороне sql, но мы же с вами сейчас тут не триггерами обмазываемся). <br />
-							У нас это был например номер счета который должен был осуществлять сквозную нумерацию счетов в течении года <br />
-							но некоторые номера счетов диктовались клиентом и не были числовыми. <br />
-							Лирическое отступление: был такой замечательный древнеримский поэт, Овидий <br />
-						  Меня поэзия, честно говоря, не особо прет, но его Метаморфозы я прочел с удовольствием <br />
-							Ну и собственно метаморфозы нам и помогут и можно взять функцию Cast и сделать вот так <br />
-						</aside>
-					</script>
-				</section>
-				<section data-markdown>
-					<script type="text/template">
-						## Max with cast on string
-
-						<pre><code data-trim data-noescape class="csharp">
-invoices
-    .Where(x => SqlFunctions.IsNumeric(x.Number + ".0e0") == 1)
-    .Select(x => x.Number)
-    .Cast&lt;int&gt;()
-    .Max()
-						</code></pre>
-
-						[Select Max, but only on numeric values with LINQ to Entities](http://stackoverflow.com/a/26363093/1033173)
-
-						<aside class="notes">
-							“.0e0” нужно чтобы исключить нецелые числа и числа со знаком валюты <br />
-							Но все хорошее когда-нибудь заканчивается и начинается черная полоса <br />
-							Сейчас я хочу рассказать вам о..ю <br />
-						</aside>
-					</script>
+							<aside class="notes">
+								“.0e0” нужно чтобы исключить нецелые числа и числа со знаком валюты <br />
+								Но все хорошее когда-нибудь заканчивается и начинается черная полоса <br />
+								Сейчас я хочу рассказать вам о... <br />
+							</aside>
+						</script>
+					</section>
 				</section>
 				<section data-markdown>
 					<script type="text/template">
@@ -293,6 +299,300 @@ invoices
 
 						<aside class="notes">
 							Всевозможных подводных камнях и проблемах с которыми мне пришлось столкнуться <br />
+						</aside>
+					</script>
+				</section>
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## В чем проблема?
+
+							<pre><code data-trim data-noescape class="csharp">
+var tasks = invoicesQuery
+     .Where(invoice => invoice.CompanyId == companyId)
+     .ToList();
+							</code></pre>
+
+							<aside class="notes">
+								Поглядим на код, в чем подвох? <br />
+								... <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Сравнение с NULL
+
+							<pre><code data-trim data-noescape class="csharp">
+var invoicesByCompany = invoicesQuery
+		 .Where(invoice => <mark>invoice.CompanyId == companyId</mark>)
+		 .ToList();
+							</code></pre>
+
+							<aside class="notes">
+								Правильно в сравнении с null, в SQL вы должны вызвать WHERE Responsible IS NULL <br />
+								а не WHERE Responsible = NULL <br />
+								Решение в лоб: <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Решение в лоб
+
+							<pre><code data-trim data-noescape class="csharp">
+var invoicesByCompany = invoicesQuery.Where(invoice =>
+    companyId != null
+        ? invoice.CompanyId == companyId
+        : invoice.CompanyId == null
+    )
+    .ToList();
+							</code></pre>
+
+							<aside class="notes">
+								Но если каждый раз так писать, то говорят, можно сойти с ума, выхода два: <br />
+								Первое как ни странно: <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Equals
+
+							<pre><code data-trim data-noescape class="csharp">
+								var invoicesByCompany = invoicesQuery
+										 .Where(invoice => <mark>invoice.CompanyId.Equals(companyId)</mark>)
+										 .ToList();
+							</code></pre>
+
+							<aside class="notes">
+								Вызвать Equals <br />
+								По мне так это нарушает принцип наименьшего удивления <br />
+								но если явно рассказать об этом всем команде и написать в Readme, то имеет право на жизнь <br />
+								Ну и третий способ это Один из трех постулатов ООП, то есть ... <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Инкапсуляция
+
+							<pre><code data-trim data-noescape class="csharp">
+Expression&lt;Func&lt;Invoice, bool&gt;&gt; CompanyIs(int? companyId) =>
+	invoice =>
+		companyId != null
+			? invoice.CompanyId == companyId
+			: invoice.CompanyId == null;
+
+var invoicesByCompany = invoicesQuery
+	.Where(CompanyIs(companyId))
+	.ToList();
+							</code></pre>
+
+							<aside class="notes">
+								Инкапсуляция <br />
+								Мне кажется это лучшим способом, ибо он повышает читаемость, можно выделить спецификацию и т.п. <br />
+							</aside>
+						</script>
+					</section>
+				</section>
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Relationship fixup
+
+							<pre style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								var invoice = new Invoice();
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								var client = invoice.Client; // null
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								invoice.ClientId = clientId;
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								client = invoice.Client; // null, ну да, еще в контекст не добавили
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								clientFromContext.Invoices.Add(invoice);
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								client = invoice.Client; // все еще null
+								// теперь Add для navigation property не вызывает DetectChanges()
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								_dbContext.Invoices.Add(invoice);
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								client = invoice.Client;
+								// опять null, может надо явно вызвать DetectChanges?
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								_dbContext.DetectChanges();
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								client = invoice.Client; // нет, не помогло, null, может сохранить?
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								_dbContext.SaveChanges();
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								client = invoice.Client; // нет, все еще null, что за фигня?
+							</code></pre>
+
+							<aside class="notes">
+								Если вы используете POCO объекты для вашим доменных классов, то вы наверняка помечаете все Navigation properties как virtual <br />
+								чтобы в рантайме Entity Framework подменил их на Dynamic proxy дабы мочь делать Lazy loading <br />
+								И казалось бы все прекрасно, но мы рано радовались когда перешли с ObjectContext и наследования от EntityObject на DbContext и POCO модели, ибо: <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Dynamic Proxy просто открывался
+
+							<pre style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								var invoice = _dbContext.Invoices.Create();
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								var client = invoice.Client; // null
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								invoice.ClientId = clientId;
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								client = invoice.Client; // null, ну да, еще в контекст не добавили
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								clientFromContext.Invoices.Add(invoice);
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								client = invoice.Client; // все еще null
+								// теперь Add для navigation property не вызывает DetectChanges()
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								_dbContext.Invoices.Add(invoice);
+							</code></pre>
+							<pre class="fragment" style="margin: 0 auto;"><code data-trim data-noescape class="csharp">
+								client = invoice.Client; // УРА, не null!
+							</code></pre>
+
+							<aside class="notes">
+								А дело в том, что мы создали просто обычный объект, который не Dynamic proxy и не умеет в lazy loading <br />
+И для того чтобы это исправить надо вызвать Create() у DbSet-а <br />
+Но теперь нельзя использовать конструкторы с параметрами, что несколько мешает подходу Rich Model и иммутабельности <br />
+							</aside>
+						</script>
+					</section>
+				</section>
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Вокруг Code First за 80 дней
+
+							<img src="assets/aroundtheworldin80days_4.jpg" style="width: 500px" />
+
+							<aside class="notes">
+Мы переезжали на code first с db-first <br />
+Помимо всего прочего это означало что нам заново надо сделать наши классы и маппинг <br />
+EF умеет сгенерить нам классы глядя на базу данных, но если у вас что-то не совпадало с базой еще в старой схеме то глядя на буз узнать это было нельзя <br />
+И мы столкнулись с проблемой котора выглядела примерно следующим образом <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Conventional mapping
+
+							<pre><code data-trim data-noescape class="csharp">
+public class Invoice
+{
+	public int Id { get; set; }
+	public virtual ICollection<Product> Products { get; set; }
+}
+
+public class Product
+{
+	public int InvoiceId { get; set; }
+}
+							</code></pre>
+
+							<aside class="notes">
+Если у вас есть две code-first модели <br />
+И мы забудем указать маппинг, то при попытке прочитать что-то из таблицы Products все упадет с ошибкой “Нет поля Invoice_Id” модели <br />
+даже несмотря на то, что в модели комментариев нет ни слова про Invoice <br />
+EF просто пытается додумать за нас те связи которые мы объявили, но забыли отконфигурировать <br />
+Это неплохая идея для прототипирования, но когда мы переезжали на code first, это попортило нам немало крови <br />
+ибо порой разобраться в том где лежит не сконфигурированная/неверно сконфигурированная связь было крайне непросто. <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Есть ли решение?
+
+							Может быть, отключить [какой-нибудь convention](https://msdn.microsoft.com/library/system.data.entity.modelconfiguration.conventions.aspx)?
+
+							<aside class="notes">
+Я на тот момент не нашел способа отключить это, а потов и вовсе забил, но я подозреваю что есть какой-нибудь foreign key naming stuff convention, который можно отключить <br />
+Ну а мы продолжаем наше путешествие в страну Code First <br />
+							</aside>
+						</script>
+					</section>
+				</section>
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Table per inheritance
+
+							<img src="assets/BillingModel.jpg" style="width: 500px" />
+
+							<aside class="notes">
+						 		У нас в ObjectContext были таблицы которые реализовывали схему TPH(Table per Inheritance), это когда у вас одна таблица, в ней дискриминатор,  <br />
+								все столбцы которые не содержатся в базовой сущности вы делаете nullable, а дальше в EDMX-е распихиваете их по нужным классам.  <br />
+								И эти классы могут ссылаться на другие сущности путем обычных FK. <br />
+								Так вот, в теории вы можете создать один столбец который будет “типа” FK, и, в зависимости от дискриминатора, ссылаться на разные сущности, определяя связь на уровне маппинга. <br />
+								Не хочется сейчас оправдывать целесообразность этого решения, ибо вы теряете ссылочную целостность, а преимущества сомнительны, но на тот момент это казалось хорошей идеей.  <br />
+								И в ObjectContext вы можете этот столбец поместить в базовую сущность, а связи конфигурировать в наследниках <br />
+								А в DbContext и CodeFirst так делать нельзя, вам нужно исключить общий столбец из базового класса и объявить его в каждом наследнике, иначе ничего не заработает. <br />
+							</aside>
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							## Code first
+
+							<pre><code data-trim data-noescape class="csharp">
+public class Audit
+{
+}
+
+public class InvoiceAudit : Audit
+{
+  public int EntityId { get; set; }
+
+  [ForeignKey(“EntityId”)]
+  public virtual Invoice Invoice { get; set; }
+}
+							</code></pre>
+
+							<aside class="notes">
+							</aside>
+						</script>
+					</section>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Спасибо!
+
+						* [Транслируемые property](https://damieng.com/blog/2009/06/24/client-side-properties-and-any-remote-linq-provider)
+						* [Использование ChangeTracker для логирования изменений](https://github.com/saitonakamura/EntityFrameworkLogger)
+						* [Пояснение про Cast](http://stackoverflow.com/a/26363093/1033173)
+						* [Презентация](https://saitonakamura.github.io/entity-framework-tips-and-tricks-presentation/)
+						* [Контакт](https://vk.com/saito_nakamura)
+
+						<aside class="notes">
+							У нас в ObjectContext были таблицы которые реализовывали схему TPH(Table per Inheritance), это когда у вас одна таблица, в ней дискриминатор, все столбцы которые не содержатся в базовой сущности вы делаете nullable, а дальше в EDMX-е распихиваете их по нужным классам. И эти классы могут ссылаться на другие сущности путем обычных FK. Так вот, в теории вы можете создать один столбец который будет “типа” FK, и, в зависимости от дискриминатора, ссылаться на разные сущности, определяя связь на уровне маппинга. Не хочется сейчас оправдывать целесообразность этого решения, ибо вы теряете ссылочную целостность, а преимущества сомнительны, но на тот момент это казалось хорошей идеей. И в ObjectContext вы можете этот столбец поместить в базовую сущность, а связи конфигурировать в наследниках. А в DbContext и CodeFirst так делать нельзя, вам нужно исключить общий столбец из базового класса и объявить его в каждом наследнике, иначе ничего не заработает. <br />
 						</aside>
 					</script>
 				</section>
